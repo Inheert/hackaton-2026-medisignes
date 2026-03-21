@@ -7,108 +7,99 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Fonts } from '@/constants/theme';
 
-type TlaOption = {
-  id: number;
+type PainGuide = {
+  id: 'low' | 'medium' | 'high';
+  label: string;
+  caption: string;
+  source: number;
+  maxValue: number;
+};
+
+type JourneyOption = {
+  id: string;
   label: string;
   source: number;
 };
 
-const TLA_IMAGES: TlaOption[] = [
+const PAIN_VALUES = Array.from({ length: 11 }, (_, index) => index);
+const PAIN_THUMB_SIZE = 42;
+const PAIN_RULE_IMAGE = require('@/assets/tla_pics/regle.png');
+const PAIN_GUIDES: PainGuide[] = [
   {
-    id: 1,
-    label: 'Image 1 · question',
-    source: require('@/assets/tla_pics/question.png'),
+    id: 'low',
+    label: '0-3',
+    caption: 'Douleur faible',
+    source: require('@/assets/tla_pics/greenguy.png'),
+    maxValue: 3,
   },
   {
-    id: 2,
-    label: 'Image 2 · non',
-    source: require('@/assets/tla_pics/non.png'),
+    id: 'medium',
+    label: '4-6',
+    caption: 'Douleur modérée',
+    source: require('@/assets/tla_pics/yellowguy.png'),
+    maxValue: 6,
   },
   {
-    id: 3,
-    label: 'Image 3 · regarder',
-    source: require('@/assets/tla_pics/regarder.png'),
+    id: 'high',
+    label: '7-10',
+    caption: 'Douleur intense',
+    source: require('@/assets/tla_pics/redguy.png'),
+    maxValue: 10,
   },
+];
+const STEP_TWO_OPTIONS: JourneyOption[] = [
   {
-    id: 4,
-    label: 'Image 4 · paques',
-    source: require('@/assets/tla_pics/paques.png'),
-  },
-  {
-    id: 5,
-    label: 'Image 5 · hat',
-    source: require('@/assets/tla_pics/hat.png'),
-  },
-  {
-    id: 6,
-    label: 'Image 6 · toi',
-    source: require('@/assets/tla_pics/toi.png'),
-  },
-  {
-    id: 7,
-    label: 'Image 7 · oui',
-    source: require('@/assets/tla_pics/oui.png'),
-  },
-  {
-    id: 8,
-    label: 'Image 8 · chocolat',
-    source: require('@/assets/tla_pics/chocolat.png'),
-  },
-  {
-    id: 9,
-    label: 'Image 9 · tete chauve',
-    source: require('@/assets/tla_pics/tete chauve.png'),
-  },
-  {
-    id: 10,
-    label: 'Image 10 · tete',
+    id: 'tete',
+    label: 'tete',
     source: require('@/assets/tla_pics/tete.png'),
   },
   {
-    id: 11,
-    label: 'Image 11 · ventre',
+    id: 'ventre',
+    label: 'ventre',
     source: require('@/assets/tla_pics/ventre.png'),
   },
   {
-    id: 12,
-    label: 'Image 12 · bras',
-    source: require('@/assets/tla_pics/bras.png'),
+    id: 'jambes',
+    label: 'jambes',
+    source: require('@/assets/tla_pics/jambes.png'),
+  },
+];
+const STEP_THREE_OPTIONS: JourneyOption[] = [
+  {
+    id: 'jours',
+    label: 'jours',
+    source: require('@/assets/tla_pics/jours.png'),
   },
   {
-    id: 13,
-    label: 'Image 13 · dos',
-    source: require('@/assets/tla_pics/dos.png'),
+    id: 'heures',
+    label: 'heures',
+    source: require('@/assets/tla_pics/heures.png'),
   },
   {
-    id: 14,
-    label: 'Image 14 · pied',
-    source: require('@/assets/tla_pics/pied.png'),
+    id: 'mois',
+    label: 'mois',
+    source: require('@/assets/tla_pics/mois.png'),
+  },
+];
+const STEP_FOUR_OPTIONS: JourneyOption[] = [
+  {
+    id: 'constipation',
+    label: 'constipation',
+    source: require('@/assets/tla_pics/constipation.png'),
   },
   {
-    id: 15,
-    label: 'Image 15 · jambe',
-    source: require('@/assets/tla_pics/jambe.png'),
+    id: 'vomissements',
+    label: 'vomissements',
+    source: require('@/assets/tla_pics/vomissements.png'),
   },
   {
-    id: 16,
-    label: 'Image 16 · plus',
-    source: require('@/assets/tla_pics/plus.png'),
-  },
-  {
-    id: 17,
-    label: 'Image 17 · moins',
-    source: require('@/assets/tla_pics/moins.png'),
+    id: 'diarrhée',
+    label: 'diarrhée',
+    source: require('@/assets/tla_pics/diarrhée.png'),
   },
 ];
 
-const STEP_ONE_IMAGE = TLA_IMAGES[0];
-const STEP_TWO_SECOND_IMAGE = TLA_IMAGES[1];
-const STEP_TWO_SEVENTH_IMAGE = TLA_IMAGES[6];
-const STEP_TWO_OPTIONS = [STEP_TWO_SECOND_IMAGE, STEP_TWO_SEVENTH_IMAGE];
-const STEP_THREE_EIGHTH_IMAGE = TLA_IMAGES[7];
-const STEP_FOUR_IMAGES = TLA_IMAGES.slice(-6);
-
-function StepSection({
+function SectionCard({
   title,
   description,
   children,
@@ -118,82 +109,89 @@ function StepSection({
   children: ReactNode;
 }) {
   return (
-    /* horrible vert*/
-    <ThemedView lightColor="#F8FCFA" darkColor="#0c2f18" style={styles.stepCard}>
-      <ThemedText type="subtitle" style={styles.stepTitle}>
+    <ThemedView lightColor="#F8FCFA" darkColor="#02afa8" style={styles.card}>
+      <ThemedText type="subtitle" style={styles.cardTitle}>
         {title}
       </ThemedText>
-      <ThemedText style={styles.stepDescription}>{description}</ThemedText>
+      <ThemedText style={styles.cardDescription}>{description}</ThemedText>
       {children}
     </ThemedView>
   );
 }
 
-function ImageTile({
+function JourneyTile({
   option,
+  isSelected,
   onPress,
-  isSelected = false,
-  compact = false,
-  tiny = false,
-  showLabel = true,
 }: {
-  option: TlaOption;
-  onPress?: () => void;
-  isSelected?: boolean;
-  compact?: boolean;
-  tiny?: boolean;
-  showLabel?: boolean;
+  option: JourneyOption;
+  isSelected: boolean;
+  onPress: () => void;
 }) {
-  const content = (
-    <>
-      <Image
-        source={option.source}
-        contentFit="contain"
-        style={[styles.image, compact && styles.imageCompact, tiny && styles.imageTiny]}
-      />
-      {showLabel ? <ThemedText style={styles.imageLabel}>{option.label}</ThemedText> : null}
-    </>
-  );
-
-  if (!onPress) {
-    return (
-      <View style={[styles.imageTile, compact && styles.imageTileCompact, tiny && styles.imageTileTiny]}>
-        {content}
-      </View>
-    );
-  }
-
   return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [
-        styles.imageTile,
-        compact && styles.imageTileCompact,
-        tiny && styles.imageTileTiny,
-        isSelected && styles.imageTileSelected,
-        pressed && styles.imageTilePressed,
+        styles.bodyAreaTile,
+        isSelected && styles.bodyAreaTileSelected,
+        pressed && styles.bodyAreaTilePressed,
       ]}>
-      {content}
+      <Image source={option.source} contentFit="contain" style={styles.bodyAreaImage} />
     </Pressable>
   );
 }
 
 export default function TlaScreen() {
-  const [isStepOneComplete, setIsStepOneComplete] = useState(false);
-  const [stepOneSelection, setStepOneSelection] = useState<number | null>(null);
-  const [stepTwoSelection, setStepTwoSelection] = useState<number | null>(null);
-  const didChooseSecondImage = stepTwoSelection === STEP_TWO_SECOND_IMAGE.id;
-  const didChooseSeventhImage = stepTwoSelection === STEP_TWO_SEVENTH_IMAGE.id;
+  const [painLevel, setPainLevel] = useState(0);
+  const [painRuleWidth, setPainRuleWidth] = useState(0);
+  const [isPainConfirmed, setIsPainConfirmed] = useState(false);
+  const [selectedStepTwoOption, setSelectedStepTwoOption] = useState<string | null>(null);
+  const [selectedStepThreeOption, setSelectedStepThreeOption] = useState<string | null>(null);
+  const [selectedStepFourOption, setSelectedStepFourOption] = useState<string | null>(null);
 
-  const handleStepOnePress = (imageNumber: number) => {
-    setStepOneSelection(imageNumber);
-    setIsStepOneComplete(true);
-    setStepTwoSelection(null);
+  const activePainGuide =
+    PAIN_GUIDES.find((guide) => painLevel <= guide.maxValue) ?? PAIN_GUIDES[PAIN_GUIDES.length - 1];
+  const selectedStepTwoLabel =
+    STEP_TWO_OPTIONS.find((option) => option.id === selectedStepTwoOption)?.label ?? null;
+  const selectedStepThreeLabel =
+    STEP_THREE_OPTIONS.find((option) => option.id === selectedStepThreeOption)?.label ?? null;
+  const selectedStepFourLabel =
+    STEP_FOUR_OPTIONS.find((option) => option.id === selectedStepFourOption)?.label ?? null;
+  const painThumbLeft =
+    painRuleWidth > 0
+      ? Math.min(
+          Math.max((painLevel / 10) * painRuleWidth - PAIN_THUMB_SIZE / 2, -PAIN_THUMB_SIZE / 2),
+          painRuleWidth - PAIN_THUMB_SIZE / 2
+        )
+      : 0;
+
+  const updatePainLevelFromPosition = (locationX: number) => {
+    if (painRuleWidth <= 0) {
+      return;
+    }
+
+    const boundedX = Math.min(Math.max(locationX, 0), painRuleWidth);
+    const nextPainLevel = Math.round((boundedX / painRuleWidth) * 10);
+    setPainLevel(nextPainLevel);
   };
 
-  const handleStepTwoPress = (imageId: number) => {
-    setStepTwoSelection(imageId);
+  const handleConfirmPain = () => {
+    setIsPainConfirmed(true);
+    setSelectedStepTwoOption(null);
+    setSelectedStepThreeOption(null);
+    setSelectedStepFourOption(null);
+  };
+
+  const handleStepTwoSelect = (optionId: string) => {
+    setSelectedStepTwoOption(optionId);
+    setSelectedStepThreeOption(null);
+    setSelectedStepFourOption(null);
+  };
+
+  const handleStepThreeSelect = (optionId: string) => {
+    setSelectedStepThreeOption(optionId);
+    setSelectedStepFourOption(null);
   };
 
   return (
@@ -209,70 +207,139 @@ export default function TlaScreen() {
           TLA
         </ThemedText>
         <ThemedText style={styles.description}>
-          Parcours visuel avec embranchement selon l’image choisie.
+          Indique ton niveau de douleur en touchant la regle.
         </ThemedText>
 
-        <StepSection
-          title="Étape 1"
-          description="Avez vous mal?">
-          <View style={styles.stepOneGrid}>
-            {Array.from({ length: 9 }, (_, index) => (
-              <ImageTile
-                key={`${STEP_ONE_IMAGE.id}-${index}`}
-                option={STEP_ONE_IMAGE}
-                onPress={() => handleStepOnePress(index + 1)}
-                isSelected={stepOneSelection === index + 1}
-                tiny
-                showLabel={false}
-              />
-            ))}
-          </View>
-        </StepSection>
+        <SectionCard
+          title="Etape 1"
+          description="0 = aucune douleur, 10 = douleur maximale">
+          <ThemedText style={styles.selectionText}>
+            {painLevel} / 10 · {activePainGuide.caption}
+          </ThemedText>
 
-        {isStepOneComplete ? (
-          <StepSection
-            title="Étape 2"
-            description="As-tu mal?">
-            {stepOneSelection !== null ? (
-              <ThemedText style={styles.selectionText}>
-                Image cliquée : {stepOneSelection}
-              </ThemedText>
-            ) : null}
-            <View style={styles.grid}>
+          <View style={styles.painScale}>
+            <View style={styles.painNumberRow}>
+              {PAIN_VALUES.map((value) => (
+                <Pressable
+                  key={value}
+                  accessibilityRole="button"
+                  onPress={() => setPainLevel(value)}
+                  style={styles.painNumberPressable}>
+                  <ThemedText style={[styles.painNumber, value === painLevel && styles.painNumberActive]}>
+                    {value}
+                  </ThemedText>
+                </Pressable>
+              ))}
+            </View>
+
+            <View
+              onLayout={(event) => setPainRuleWidth(event.nativeEvent.layout.width)}
+              onMoveShouldSetResponder={() => true}
+              onResponderGrant={(event) => updatePainLevelFromPosition(event.nativeEvent.locationX)}
+              onResponderMove={(event) => updatePainLevelFromPosition(event.nativeEvent.locationX)}
+              onStartShouldSetResponder={() => true}
+              style={styles.painRuleTouchArea}>
+              <Image source={PAIN_RULE_IMAGE} contentFit="contain" style={styles.painRuleImage} />
+
+              {painRuleWidth > 0 ? (
+                <View pointerEvents="none" style={[styles.painThumb, { left: painThumbLeft }]}>
+                  <Image source={activePainGuide.source} contentFit="contain" style={styles.painThumbImage} />
+                </View>
+              ) : null}
+            </View>
+
+            <View style={styles.painGuideRow}>
+              {PAIN_GUIDES.map((guide) => (
+                <View
+                  key={guide.id}
+                  style={[styles.painGuideCard, activePainGuide.id === guide.id && styles.painGuideCardActive]}>
+                  <Image source={guide.source} contentFit="contain" style={styles.painGuideImage} />
+                  <ThemedText style={styles.painGuideLabel}>{guide.label}</ThemedText>
+                  <ThemedText style={styles.painGuideCaption}>{guide.caption}</ThemedText>
+                </View>
+              ))}
+            </View>
+
+            <Pressable
+              accessibilityRole="button"
+              onPress={handleConfirmPain}
+              style={({ pressed }) => [
+                styles.confirmButton,
+                pressed && styles.confirmButtonPressed,
+              ]}>
+              <ThemedText style={styles.confirmButtonText}>Confirmer</ThemedText>
+            </Pressable>
+          </View>
+        </SectionCard>
+
+        {isPainConfirmed ? (
+          <SectionCard
+            title="Etape 2"
+            description="Ou avez vous mal?">
+            <View style={styles.optionRow}>
               {STEP_TWO_OPTIONS.map((option) => (
-                <ImageTile
+                <JourneyTile
                   key={option.id}
                   option={option}
-                  compact
-                  onPress={() => handleStepTwoPress(option.id)}
-                  isSelected={stepTwoSelection === option.id}
+                  isSelected={selectedStepTwoOption === option.id}
+                  onPress={() => handleStepTwoSelect(option.id)}
                 />
               ))}
             </View>
-          </StepSection>
+            {selectedStepTwoLabel ? (
+              <ThemedText style={styles.choiceSummaryText}>
+                Image choisie : {selectedStepTwoLabel}
+              </ThemedText>
+            ) : null}
+          </SectionCard>
         ) : null}
 
-        {didChooseSecondImage ? (
-          <StepSection
-            title="Étape 3"
-            description="">
-            <>
-              <ImageTile option={STEP_THREE_EIGHTH_IMAGE} />
-              <ThemedText style={styles.endText}>Prends du chocolat</ThemedText>
-            </>
-          </StepSection>
-        ) : null}
-
-        {didChooseSeventhImage ? (
-          <StepSection
-            title="Étape 4"
-            description="où avez vous mal?">
-            <View style={styles.grid}>
-              {STEP_FOUR_IMAGES.map((option) => (
-                <ImageTile key={option.id} option={option} compact />
+        {selectedStepTwoOption ? (
+          <SectionCard
+            title="Etape 3"
+            description="Depuis quand?">
+            <View style={styles.optionRow}>
+              {STEP_THREE_OPTIONS.map((option) => (
+                <JourneyTile
+                  key={option.id}
+                  option={option}
+                  isSelected={selectedStepThreeOption === option.id}
+                  onPress={() => handleStepThreeSelect(option.id)}
+                />
               ))}
             </View>
-          </StepSection>
+            {selectedStepThreeLabel ? (
+              <ThemedText style={styles.choiceSummaryText}>
+                Image choisie : {selectedStepThreeLabel}
+              </ThemedText>
+            ) : null}
+          </SectionCard>
+        ) : null}
+
+        {selectedStepThreeOption ? (
+          <SectionCard
+            title="Etape 4"
+            description="Quels symptomes?">
+            <View style={styles.optionRow}>
+              {STEP_FOUR_OPTIONS.map((option) => (
+                <JourneyTile
+                  key={option.id}
+                  option={option}
+                  isSelected={selectedStepFourOption === option.id}
+                  onPress={() => setSelectedStepFourOption(option.id)}
+                />
+              ))}
+            </View>
+            {selectedStepFourLabel ? (
+              <ThemedText style={styles.choiceSummaryText}>
+                Image choisie : {selectedStepFourLabel}
+              </ThemedText>
+            ) : null}
+          </SectionCard>
+        ) : null}
+
+        {selectedStepFourOption ? (
+          <ThemedText style={styles.endText}>Fin du parcours</ThemedText>
         ) : null}
       </ThemedView>
     </ParallaxScrollView>
@@ -293,7 +360,7 @@ const styles = StyleSheet.create({
   },
   headerText: {
     fontSize: 38,
-    fontWeight: '800',
+    fontFamily: Fonts.extraBold,
     letterSpacing: 2,
     color: '#e3e013',
   },
@@ -302,13 +369,13 @@ const styles = StyleSheet.create({
   },
   title: {
     textAlign: 'center',
-    fontFamily: Fonts.rounded,
+    fontFamily: Fonts.extraBold,
   },
   description: {
     textAlign: 'center',
     opacity: 0.8,
   },
-  stepCard: {
+  card: {
     borderRadius: 24,
     padding: 20,
     gap: 14,
@@ -321,84 +388,158 @@ const styles = StyleSheet.create({
     },
     elevation: 3,
   },
-  stepTitle: {
+  cardTitle: {
     textAlign: 'center',
-    fontFamily: Fonts.rounded,
+    fontFamily: Fonts.bold,
   },
-  stepDescription: {
+  cardDescription: {
     textAlign: 'center',
     opacity: 0.78,
   },
   selectionText: {
     textAlign: 'center',
-    fontWeight: '700',
-    color: '#ff00e6', //horrible rose
+    fontFamily: Fonts.bold,
+    color: '#236B56',
   },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
+  painScale: {
+    gap: 14,
   },
-  stepOneGrid: {
+  painNumberRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  painNumberPressable: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  painNumber: {
+    fontFamily: Fonts.bold,
+    color: '#7C8F87',
+  },
+  painNumberActive: {
+    color: '#174B3B',
+  },
+  painRuleTouchArea: {
+    position: 'relative',
+    width: '100%',
+    justifyContent: 'center',
+    paddingVertical: 4,
+  },
+  painRuleImage: {
+    width: '100%',
+    height: 64,
+  },
+  painThumb: {
+    position: 'absolute',
+    top: 14,
+    width: PAIN_THUMB_SIZE,
+    height: PAIN_THUMB_SIZE,
+  },
+  painThumbImage: {
+    width: '100%',
+    height: '100%',
+  },
+  painGuideRow: {
+    flexDirection: 'row',
     gap: 10,
   },
-  imageTile: {
-    width: '100%',
+  painGuideCard: {
+    flex: 1,
     borderRadius: 18,
-    padding: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    gap: 4,
     borderWidth: 1,
     borderColor: '#D6E6DC',
     backgroundColor: '#FFFFFF',
-    gap: 8,
   },
-  imageTileCompact: {
-    width: '48%',
+  painGuideCardActive: {
+    borderWidth: 4,
+    borderColor: '#0b3e6b',
+    backgroundColor: '#F1FAF6',
   },
-  imageTileTiny: {
-    width: '31%',
-    padding: 8,
+  painGuideImage: {
+    width: 38,
+    height: 38,
   },
-  imageTileSelected: {
-    borderColor: '#2A9D8F',
-    shadowColor: '#2A9D8F',
-    shadowOpacity: 0.15,
+  painGuideLabel: {
+    fontFamily: Fonts.bold,
+    color: '#0b3e6b',
+  },
+  painGuideCaption: {
+    textAlign: 'center',
+    fontSize: 12,
+    opacity: 0.72,
+    fontFamily: Fonts.regular,
+    color: '#0b3e6b',
+  },
+  confirmButton: {
+    marginTop: 2,
+    borderRadius: 18,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#236B56',
+  },
+  confirmButtonPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.99 }],
+  },
+  confirmButtonText: {
+    color: '#FFFFFF',
+    fontFamily: Fonts.bold,
+  },
+  optionRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  bodyAreaTile: {
+    flex: 1,
+    minWidth: 0,
+    borderRadius: 18,
+    padding: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#D6E6DC',
+    backgroundColor: '#FFFFFF',
+  },
+  bodyAreaTileSelected: {
+    borderWidth: 4,
+    borderColor: '#0b3e6b',
+    backgroundColor: '#F1FAF6',
+    shadowColor: '#0b3e6b',
+    shadowOpacity: 0.12,
     shadowRadius: 10,
     shadowOffset: {
       width: 0,
       height: 4,
     },
-    elevation: 4,
+    elevation: 3,
   },
-  imageTilePressed: {
-    opacity: 0.88,
+  bodyAreaTilePressed: {
+    opacity: 0.9,
     transform: [{ scale: 0.99 }],
   },
-  image: {
+  bodyAreaImage: {
     width: '100%',
-    height: 220,
-  },
-  imageCompact: {
-    height: 150,
-  },
-  imageTiny: {
     height: 90,
-  },
-  imageLabel: {
-    textAlign: 'center',
-    fontWeight: '600',
   },
   endText: {
     textAlign: 'center',
-    fontWeight: '700',
-    color: '#68dd3a',
+    fontFamily: Fonts.bold,
+    color: '#FFFFFF',
+    backgroundColor: '#0b3e6b',
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    overflow: 'hidden',
+    alignSelf: 'center',
+  },
+  choiceSummaryText: {
+    textAlign: 'center',
+    fontFamily: Fonts.semiBold,
+    color: '#174B3B',
   },
 });
-
-/*
-Niveau de douleur
-où avez vous mal? --> jambes, ventre, tête
-depuis quand? --> heures, jour, mois
-quels symptômes? --> 
-*/
