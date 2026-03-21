@@ -395,3 +395,10 @@ const styles = StyleSheet.create({
     color: '#68dd3a',
   },
 });
+
+/*
+Niveau de douleur
+où avez vous mal? --> jambes, ventre, tête
+depuis quand? --> heures, jour, mois
+quels symptômes? --> 
+*/
