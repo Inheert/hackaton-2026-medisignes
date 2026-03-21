@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
   },
   headerText: {
     fontSize: 38,
-    fontWeight: '800',
+    fontFamily: Fonts.extraBold,
     letterSpacing: 3,
     color: '#12362B',
   },
@@ -196,7 +196,7 @@ const styles = StyleSheet.create({
   },
   title: {
     textAlign: 'center',
-    fontFamily: Fonts.rounded,
+    fontFamily: Fonts.extraBold,
   },
   description: {
     textAlign: 'center',
@@ -216,10 +216,10 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   cardTitle: {
-    fontFamily: Fonts.rounded,
+    fontFamily: Fonts.bold,
   },
   statusText: {
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
     color: '#236B56',
   },
   actions: {
@@ -250,11 +250,11 @@ const styles = StyleSheet.create({
   },
   buttonTextLight: {
     color: '#FFFFFF',
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
   },
   buttonTextDark: {
     color: '#12362B',
-    fontWeight: '700',
+    fontFamily: Fonts.bold,
   },
   feedbackText: {
     color: '#7A3E00',
