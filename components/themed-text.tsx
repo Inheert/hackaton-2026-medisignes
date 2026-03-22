@@ -58,6 +58,6 @@ const styles = StyleSheet.create({
     lineHeight: 30,
     fontSize: 16,
     fontFamily: Fonts.semiBold,
-    color: '#0a7ea4',
+    color: '#02AFA8',
   },
 });
