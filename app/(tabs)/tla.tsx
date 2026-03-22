@@ -61,8 +61,8 @@ function getPainColor(id: 'low' | 'medium' | 'high'): string {
 }
 const STEP_TWO_OPTIONS: JourneyOption[] = [
   {
-    id: 'tete',
-    label: 'tete',
+    id: 'tête',
+    label: 'tête',
     source: require('@/assets/tla_pics/tete.png'),
   },
   {
@@ -121,7 +121,7 @@ function SectionCard({
   children: ReactNode;
 }) {
   return (
-    <ThemedView lightColor="#F8FCFA" darkColor="#02afa8" style={styles.card}>
+    <ThemedView lightColor="#FFFFFF" darkColor="#02afa8" style={styles.card}>
       <ThemedText type="subtitle" style={styles.cardTitle}>
         {title}
       </ThemedText>
@@ -214,7 +214,7 @@ export default function TlaScreen() {
           <ThemedText style={styles.headerText}>TLA</ThemedText>
         </ThemedView>
       }>
-      <ThemedView lightColor="#F8FCFA" darkColor="#000000" style={styles.content}>
+      <ThemedView lightColor="#FFFFFF" darkColor="#000000" style={styles.content}>
         <ThemedText type="title" style={styles.title}>
           TLA
         </ThemedText>
@@ -287,7 +287,7 @@ export default function TlaScreen() {
         {isPainConfirmed ? (
           <SectionCard
             title="Etape 2"
-            description="Ou avez vous mal?">
+            description="Où avez vous mal?">
             <View style={styles.optionRow}>
               {STEP_TWO_OPTIONS.map((option) => (
                 <JourneyTile
@@ -386,6 +386,8 @@ const styles = StyleSheet.create({
   description: {
     textAlign: 'center',
     opacity: 0.8,
+    fontFamily: Fonts.bold,
+    color: '#FFFFFF',
   },
   card: {
     borderRadius: 24,
@@ -403,10 +405,13 @@ const styles = StyleSheet.create({
   cardTitle: {
     textAlign: 'center',
     fontFamily: Fonts.bold,
+    color: '#FFFFFF',
   },
   cardDescription: {
     textAlign: 'center',
     opacity: 0.78,
+    fontFamily: Fonts.bold,
+    color: '#FFFFFF',
   },
   selectionText: {
     textAlign: 'center',
@@ -463,13 +468,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     borderWidth: 1,
-    borderColor: '#D6E6DC',
+    borderColor: '#FFFFFF',
     backgroundColor: '#FFFFFF',
   },
   painGuideCardActive: {
     borderWidth: 4,
     borderColor: '#0b3e6b',
-    backgroundColor: '#F1FAF6',
+    backgroundColor: '#FFFFFF',
   },
   painGuideImage: {
     width: 38,
@@ -483,7 +488,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 12,
     opacity: 0.72,
-    fontFamily: Fonts.regular,
+    fontFamily: Fonts.bold,
   },
   confirmButton: {
     marginTop: 2,
@@ -512,13 +517,13 @@ const styles = StyleSheet.create({
     padding: 10,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#D6E6DC',
+    borderColor: '#FFFFFF',
     backgroundColor: '#FFFFFF',
   },
   bodyAreaTileSelected: {
     borderWidth: 4,
     borderColor: '#0b3e6b',
-    backgroundColor: '#F1FAF6',
+    backgroundColor: '#FFFFFF',
     shadowColor: '#0b3e6b',
     shadowOpacity: 0.12,
     shadowRadius: 10,
@@ -549,7 +554,7 @@ const styles = StyleSheet.create({
   },
   choiceSummaryText: {
     textAlign: 'center',
-    fontFamily: Fonts.semiBold,
+    fontFamily: Fonts.bold,
     color: '#0b3e6b',
   },
 });
