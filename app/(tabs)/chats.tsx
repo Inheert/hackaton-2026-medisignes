@@ -1,34 +1,32 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import type { ExpoSpeechRecognitionResultEvent } from 'expo-speech-recognition';
+import { useIsFocused } from '@react-navigation/native';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View, useWindowDimensions } from 'react-native';
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 
+import { createChatId, loadPersistedChatState, persistChatState, type ChatRoom } from '@/chat-store';
 import { ThemedText } from '@/components/themed-text';
 import { Fonts } from '@/constants/theme';
 
 type SpeechRecognitionPackage = typeof import('expo-speech-recognition');
 
-type ChatMessage = {
-  id: string;
-  text: string;
-  createdAt: number;
-};
-
-type ChatRoom = {
-  id: string;
-  title: string;
-  messages: ChatMessage[];
-};
-
-const CHAT_STORAGE_KEY = 'chats:v1';
-const ACTIVE_CHAT_STORAGE_KEY = 'chats:activeChatId:v1';
 const BRAND_TEAL = '#02AFA8';
 const BRAND_NAVY = '#0B3E6B';
 const BORDER_COLOR = 'rgba(11, 62, 107, 0.10)';
-const SURFACE_COLOR = '#F8FCFD';
-const MUTED_TEXT = '#5A7488';
+const MUTED_TEXT = '#6F7D8D';
 const DANGER_COLOR = '#D75B49';
+const BUBBLE_BG = '#D9D9DC';
+const COMPOSER_BG = '#E3E7ED';
 
 const speechRecognitionPackage = (() => {
   try {
@@ -43,10 +41,12 @@ const speechRecognitionPackage = (() => {
 const speechRecognitionModule = speechRecognitionPackage?.ExpoSpeechRecognitionModule ?? null;
 
 export default function ChatsScreen() {
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
+  const isFocused = useIsFocused();
   const [chats, setChats] = useState<ChatRoom[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [newChatTitle, setNewChatTitle] = useState('');
+  const [draftMessage, setDraftMessage] = useState('');
   const [editedChatTitle, setEditedChatTitle] = useState('');
   const [isRenamingChat, setIsRenamingChat] = useState(false);
   const [hasHydrated, setHasHydrated] = useState(false);
@@ -55,13 +55,17 @@ export default function ChatsScreen() {
   const [isListening, setIsListening] = useState(false);
   const [feedback, setFeedback] = useState(
     speechRecognitionModule
-      ? 'Appuyez sur Démarrer pour parler.'
+      ? 'Appuyez sur le micro pour parler.'
       : "Le module natif de reconnaissance vocale n'est pas disponible dans ce build."
   );
 
   const previousActiveChatId = useRef<string | null>(null);
 
-  const isWide = width >= 980;
+  const isDesktop = width >= 900;
+  const isCompact = width < 480;
+  const managerPanelMaxHeight = isDesktop
+    ? Math.max(240, Math.min(height * 0.34, 360))
+    : Math.max(210, Math.min(height * 0.30, 290));
   const isSpeechRecognitionAvailable = speechRecognitionModule !== null;
   const activeChat = useMemo(() => chats.find((chat) => chat.id === activeChatId) ?? null, [chats, activeChatId]);
 
@@ -70,25 +74,14 @@ export default function ChatsScreen() {
 
     const hydrate = async () => {
       try {
-        const [storedChats, storedActiveChatId] = await Promise.all([
-          AsyncStorage.getItem(CHAT_STORAGE_KEY),
-          AsyncStorage.getItem(ACTIVE_CHAT_STORAGE_KEY),
-        ]);
+        const { chats: storedChats, activeChatId: storedActiveChatId } = await loadPersistedChatState();
 
         if (!isMounted) {
           return;
         }
 
-        if (storedChats) {
-          const parsed = JSON.parse(storedChats) as ChatRoom[];
-          if (Array.isArray(parsed)) {
-            setChats(parsed);
-          }
-        }
-
-        if (storedActiveChatId) {
-          setActiveChatId(storedActiveChatId);
-        }
+        setChats(storedChats);
+        setActiveChatId(storedActiveChatId);
       } catch {
         if (isMounted) {
           setFeedback("Impossible de restaurer les chats sauvegardés.");
@@ -100,12 +93,30 @@ export default function ChatsScreen() {
       }
     };
 
-    hydrate();
+    void hydrate();
 
     return () => {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!hasHydrated || !isFocused) {
+      return;
+    }
+
+    const refreshFromStorage = async () => {
+      try {
+        const { chats: storedChats, activeChatId: storedActiveChatId } = await loadPersistedChatState();
+        setChats(storedChats);
+        setActiveChatId(storedActiveChatId);
+      } catch {
+        setFeedback("Impossible de restaurer les chats sauvegardés.");
+      }
+    };
+
+    void refreshFromStorage();
+  }, [hasHydrated, isFocused]);
 
   useEffect(() => {
     if (!hasHydrated) {
@@ -114,18 +125,13 @@ export default function ChatsScreen() {
 
     const persist = async () => {
       try {
-        await Promise.all([
-          AsyncStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(chats)),
-          activeChatId
-            ? AsyncStorage.setItem(ACTIVE_CHAT_STORAGE_KEY, activeChatId)
-            : AsyncStorage.removeItem(ACTIVE_CHAT_STORAGE_KEY),
-        ]);
+        await persistChatState(chats, activeChatId);
       } catch {
         // Best-effort persistence: ignore write failures.
       }
     };
 
-    persist();
+    void persist();
   }, [activeChatId, chats, hasHydrated]);
 
   useEffect(() => {
@@ -140,7 +146,7 @@ export default function ChatsScreen() {
       }),
       speechRecognitionModule.addListener('end', () => {
         setIsListening(false);
-        setFeedback('Enregistrement terminé. Cliquez sur Ajouter au chat si vous voulez conserver le message.');
+        setFeedback('Enregistrement terminé.');
       }),
       speechRecognitionModule.addListener('result', (event: ExpoSpeechRecognitionResultEvent) => {
         const latestResult = event.results[event.results.length - 1];
@@ -177,7 +183,7 @@ export default function ChatsScreen() {
     }
 
     const nextChat: ChatRoom = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+      id: createChatId(),
       title,
       messages: [],
     };
@@ -188,16 +194,15 @@ export default function ChatsScreen() {
     setFeedback(`Chat '${title}' créé.`);
   };
 
-  const addMessageToChat = (text: string) => {
+  const appendMessageToChat = (text: string) => {
     if (!activeChatId) {
-      setFeedback('Sélectionnez un chat pour ajouter la transcription.');
-      return;
+      setFeedback('Sélectionnez un chat pour ajouter un message.');
+      return false;
     }
 
     const normalized = text.trim();
     if (!normalized) {
-      setFeedback('Aucun texte reconnu à enregistrer.');
-      return;
+      return false;
     }
 
     setChats((prev) =>
@@ -209,7 +214,7 @@ export default function ChatsScreen() {
               messages: [
                 ...chat.messages,
                 {
-                  id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+                  id: createChatId(),
                   text: normalized,
                   createdAt: Date.now(),
                 },
@@ -218,8 +223,35 @@ export default function ChatsScreen() {
       )
     );
 
-    setFeedback('Message ajouté au chat.');
-    setTranscript('');
+    return true;
+  };
+
+  const addMessageToChat = (text: string) => {
+    const normalized = text.trim();
+
+    if (!normalized) {
+      setFeedback('Aucun texte reconnu à enregistrer.');
+      return;
+    }
+
+    if (appendMessageToChat(normalized)) {
+      setFeedback('Message ajouté au chat.');
+      setTranscript('');
+    }
+  };
+
+  const sendDraftMessage = () => {
+    const normalized = draftMessage.trim();
+
+    if (!normalized) {
+      setFeedback('Écrivez un message.');
+      return;
+    }
+
+    if (appendMessageToChat(normalized)) {
+      setDraftMessage('');
+      setFeedback('Message envoyé.');
+    }
   };
 
   const startRenamingChat = () => {
@@ -297,6 +329,7 @@ export default function ChatsScreen() {
             setEditedChatTitle(nextActiveChat?.title ?? '');
             setIsRenamingChat(false);
             setTranscript('');
+            setDraftMessage('');
             setFeedback(`Chat '${activeChat.title}' supprimé.`);
           },
         },
@@ -339,292 +372,327 @@ export default function ChatsScreen() {
     }
   };
 
+  const handleMicroPress = () => {
+    if (isListening) {
+      stopListening();
+      return;
+    }
+
+    void startListening();
+  };
+
+  const handleCameraPress = () => {
+    Alert.alert('Caméra', "L'ajout d'image sera disponible bientôt.");
+  };
+
+  const renderEmptyBubble = (title: string, description: string) => (
+    <View style={styles.messageBlock}>
+      <View style={styles.messageBubble}>
+        <ThemedText lightColor="#111111" darkColor="#111111" style={styles.messageText}>
+          {title}
+          {'\n'}
+          {description}
+        </ThemedText>
+        <View style={styles.messageTail} />
+      </View>
+      <ThemedText lightColor="#8A8F97" darkColor="#8A8F97" style={styles.messageMeta}>
+        Message automatique
+      </ThemedText>
+    </View>
+  );
+
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={styles.page}>
-        <View style={styles.header}>
-          <View style={styles.headerBadge}>
-            <MaterialIcons color={BRAND_TEAL} name="chat-bubble-outline" size={18} />
-            <ThemedText lightColor={BRAND_NAVY} darkColor={BRAND_NAVY} style={styles.headerBadgeText}>
-              Conversation médicale
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={styles.screen}>
+      <View style={styles.header}>
+        <View style={styles.headerTop}>
+          <View style={styles.headerIcon}>
+            <MaterialIcons color="#FFFFFF" name="chat-bubble-outline" size={20} />
+          </View>
+          <View style={styles.headerCopy}>
+            <ThemedText lightColor="#FFFFFF" darkColor="#FFFFFF" style={styles.headerTitle}>
+              Conversation
+            </ThemedText>
+            <ThemedText lightColor="#D5E4F2" darkColor="#D5E4F2" style={styles.headerSubtitle}>
+              {activeChat ? activeChat.title : 'Choisissez un chat'}
             </ThemedText>
           </View>
-
-          <ThemedText lightColor={BRAND_NAVY} darkColor={BRAND_NAVY} style={styles.title}>
-            Chat
-          </ThemedText>
-          <ThemedText lightColor={MUTED_TEXT} darkColor={MUTED_TEXT} style={styles.description}>
-            Créez vos conversations, enregistrez la voix et conservez chaque phrase dans le bon chat.
-          </ThemedText>
-        </View>
-
-        <View style={[styles.grid, isWide && styles.gridWide]}>
-          <View style={styles.sideColumn}>
-            <View style={styles.card}>
-              <View style={styles.sectionHeader}>
-                <ThemedText lightColor={BRAND_NAVY} darkColor={BRAND_NAVY} style={styles.cardTitle}>
-                  Nouveau chat
-                </ThemedText>
-                <ThemedText lightColor={MUTED_TEXT} darkColor={MUTED_TEXT} style={styles.sectionHint}>
-                  Donnez un nom simple
-                </ThemedText>
-              </View>
-
-              <View style={styles.createRow}>
-                <TextInput
-                  placeholder="Nom du chat"
-                  placeholderTextColor="#89A0B1"
-                  value={newChatTitle}
-                  onChangeText={setNewChatTitle}
-                  style={styles.input}
-                />
-                <Pressable
-                  onPress={createChat}
-                  style={({ pressed }) => [styles.smallActionButton, pressed && styles.buttonPressed]}>
-                  <MaterialIcons color="#FFFFFF" name="add" size={18} />
-                  <ThemedText lightColor="#FFFFFF" darkColor="#FFFFFF" style={styles.smallActionButtonText}>
-                    Créer
-                  </ThemedText>
-                </Pressable>
-              </View>
-
-              <View style={styles.chipsWrap}>
-                {chats.length === 0 ? (
-                  <View style={styles.emptyBox}>
-                    <ThemedText lightColor={MUTED_TEXT} darkColor={MUTED_TEXT} style={styles.emptyText}>
-                      Aucun chat pour le moment.
-                    </ThemedText>
-                  </View>
-                ) : (
-                  chats.map((chat) => {
-                    const selected = chat.id === activeChatId;
-
-                    return (
-                      <Pressable
-                        key={chat.id}
-                        onPress={() => setActiveChatId(chat.id)}
-                        style={[styles.chatChip, selected && styles.chatChipActive]}>
-                        <ThemedText
-                          lightColor={selected ? '#FFFFFF' : BRAND_NAVY}
-                          darkColor={selected ? '#FFFFFF' : BRAND_NAVY}
-                          style={styles.chatChipText}>
-                          {chat.title}
-                        </ThemedText>
-                      </Pressable>
-                    );
-                  })
-                )}
-              </View>
-            </View>
-
-            <View style={styles.card}>
-              <View style={styles.sectionHeader}>
-                <ThemedText lightColor={BRAND_NAVY} darkColor={BRAND_NAVY} style={styles.cardTitle}>
-                  Enregistrement vocal
-                </ThemedText>
-                <View style={[styles.statusPill, isListening && styles.statusPillActive]}>
-                  <View style={[styles.statusDot, isListening && styles.statusDotActive]} />
-                  <ThemedText
-                    lightColor={isListening ? BRAND_TEAL : BRAND_NAVY}
-                    darkColor={isListening ? BRAND_TEAL : BRAND_NAVY}
-                    style={styles.statusText}>
-                    {isSpeechRecognitionAvailable
-                      ? isListening
-                        ? 'En cours'
-                        : 'Prêt'
-                      : 'Indisponible'}
-                  </ThemedText>
-                </View>
-              </View>
-
-              <View style={styles.actions}>
-                <Pressable
-                  accessibilityRole="button"
-                  disabled={!isSpeechRecognitionAvailable}
-                  onPress={startListening}
-                  style={({ pressed }) => [
-                    styles.button,
-                    styles.primaryButton,
-                    !isSpeechRecognitionAvailable && styles.buttonDisabled,
-                    pressed && isSpeechRecognitionAvailable && styles.buttonPressed,
-                  ]}>
-                  <MaterialIcons color="#FFFFFF" name="mic" size={18} />
-                  <ThemedText lightColor="#FFFFFF" darkColor="#FFFFFF" style={styles.buttonTextLight}>
-                    Démarrer
-                  </ThemedText>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  disabled={!isSpeechRecognitionAvailable}
-                  onPress={stopListening}
-                  style={({ pressed }) => [
-                    styles.button,
-                    styles.secondaryButton,
-                    !isSpeechRecognitionAvailable && styles.buttonDisabled,
-                    pressed && isSpeechRecognitionAvailable && styles.buttonPressed,
-                  ]}>
-                  <MaterialIcons color={BRAND_NAVY} name="stop" size={18} />
-                  <ThemedText lightColor={BRAND_NAVY} darkColor={BRAND_NAVY} style={styles.buttonTextDark}>
-                    Arrêter
-                  </ThemedText>
-                </Pressable>
-              </View>
-
-              <View style={styles.feedbackBox}>
-                <ThemedText lightColor={MUTED_TEXT} darkColor={MUTED_TEXT} style={styles.feedbackText}>
-                  {feedback}
-                </ThemedText>
-              </View>
-
-              <View style={styles.transcriptCard}>
-                <ThemedText lightColor={BRAND_NAVY} darkColor={BRAND_NAVY} style={styles.transcriptLabel}>
-                  Transcription
-                </ThemedText>
-                <ThemedText lightColor="#21415D" darkColor="#21415D" style={styles.transcriptText}>
-                  {transcript || 'Aucune transcription pour le moment.'}
-                </ThemedText>
-              </View>
-
-              <Pressable
-                onPress={() => addMessageToChat(transcript)}
-                disabled={!activeChat || !transcript.trim()}
-                style={({ pressed }) => [
-                  styles.button,
-                  styles.primaryButton,
-                  (!activeChat || !transcript.trim()) && styles.buttonDisabled,
-                  pressed && activeChat && transcript.trim() && styles.buttonPressed,
-                ]}>
-                <MaterialIcons color="#FFFFFF" name="south-east" size={18} />
-                <ThemedText lightColor="#FFFFFF" darkColor="#FFFFFF" style={styles.buttonTextLight}>
-                  Ajouter au chat
-                </ThemedText>
-              </Pressable>
-
-              {!isSpeechRecognitionAvailable ? (
-                <View style={styles.helpCard}>
-                  <ThemedText lightColor={BRAND_NAVY} darkColor={BRAND_NAVY} style={styles.helpTitle}>
-                    Comment l&apos;activer
-                  </ThemedText>
-                  <ThemedText lightColor={MUTED_TEXT} darkColor={MUTED_TEXT} style={styles.helpText}>
-                    Ce package demande un development build natif après ajout du plugin.
-                  </ThemedText>
-                  <ThemedText lightColor={BRAND_TEAL} darkColor={BRAND_TEAL} style={styles.helpCommand}>
-                    npx expo run:ios
-                  </ThemedText>
-                  <ThemedText lightColor={BRAND_TEAL} darkColor={BRAND_TEAL} style={styles.helpCommand}>
-                    npx expo run:android
-                  </ThemedText>
-                </View>
-              ) : null}
-            </View>
-          </View>
-
-          <View style={styles.mainColumn}>
-            <View style={[styles.card, styles.chatCard]}>
-              <View style={styles.chatHeader}>
-                <View style={styles.chatHeaderCopy}>
-                  <ThemedText lightColor={BRAND_NAVY} darkColor={BRAND_NAVY} style={styles.cardTitle}>
-                    Chat actif
-                  </ThemedText>
-                  <ThemedText lightColor={MUTED_TEXT} darkColor={MUTED_TEXT} style={styles.activeChatTitle}>
-                    {activeChat ? activeChat.title : 'Aucun chat sélectionné'}
-                  </ThemedText>
-                </View>
-
-                {activeChat ? (
-                  <View style={styles.actionStack}>
-                    {isRenamingChat ? (
-                      <>
-                        <Pressable
-                          onPress={renameActiveChat}
-                          style={({ pressed }) => [styles.ghostButton, styles.ghostButtonFilled, pressed && styles.buttonPressed]}>
-                          <ThemedText lightColor="#FFFFFF" darkColor="#FFFFFF" style={styles.ghostButtonTextLight}>
-                            Enregistrer
-                          </ThemedText>
-                        </Pressable>
-                        <Pressable
-                          onPress={cancelRenamingChat}
-                          style={({ pressed }) => [styles.ghostButton, pressed && styles.buttonPressed]}>
-                          <ThemedText lightColor={BRAND_NAVY} darkColor={BRAND_NAVY} style={styles.ghostButtonTextDark}>
-                            Annuler
-                          </ThemedText>
-                        </Pressable>
-                      </>
-                    ) : (
-                      <>
-                        <Pressable
-                          onPress={startRenamingChat}
-                          style={({ pressed }) => [styles.ghostButton, pressed && styles.buttonPressed]}>
-                          <ThemedText lightColor={BRAND_NAVY} darkColor={BRAND_NAVY} style={styles.ghostButtonTextDark}>
-                            Renommer
-                          </ThemedText>
-                        </Pressable>
-                        <Pressable
-                          onPress={deleteActiveChat}
-                          style={({ pressed }) => [styles.ghostButton, styles.ghostButtonDanger, pressed && styles.buttonPressed]}>
-                          <ThemedText lightColor="#FFFFFF" darkColor="#FFFFFF" style={styles.ghostButtonTextLight}>
-                            Supprimer
-                          </ThemedText>
-                        </Pressable>
-                      </>
-                    )}
-                  </View>
-                ) : null}
-              </View>
-
-              {isRenamingChat ? (
-                <TextInput
-                  placeholder="Nouveau nom du chat"
-                  placeholderTextColor="#89A0B1"
-                  value={editedChatTitle}
-                  onChangeText={setEditedChatTitle}
-                  style={styles.input}
-                />
-              ) : null}
-
-              {activeChat ? (
-                <View style={styles.messagesBox}>
-                  {activeChat.messages.length === 0 ? (
-                    <View style={styles.emptyStateLarge}>
-                      <MaterialIcons color={BRAND_TEAL} name="chat-bubble-outline" size={28} />
-                      <ThemedText lightColor={BRAND_NAVY} darkColor={BRAND_NAVY} style={styles.emptyStateTitle}>
-                        Aucun message
-                      </ThemedText>
-                      <ThemedText lightColor={MUTED_TEXT} darkColor={MUTED_TEXT} style={styles.emptyStateText}>
-                        Lancez un enregistrement vocal ou ajoutez une transcription à cette conversation.
-                      </ThemedText>
-                    </View>
-                  ) : (
-                    <View style={styles.messagesList}>
-                      {activeChat.messages.map((item) => (
-                        <View key={item.id} style={styles.messageBubble}>
-                          <ThemedText lightColor="#183854" darkColor="#183854" style={styles.messageText}>
-                            {item.text}
-                          </ThemedText>
-                          <ThemedText lightColor="#7A90A2" darkColor="#7A90A2" style={styles.messageTime}>
-                            {new Date(item.createdAt).toLocaleTimeString()}
-                          </ThemedText>
-                        </View>
-                      ))}
-                    </View>
-                  )}
-                </View>
-              ) : (
-                <View style={styles.emptyStateLarge}>
-                  <MaterialIcons color={BRAND_TEAL} name="forum" size={28} />
-                  <ThemedText lightColor={BRAND_NAVY} darkColor={BRAND_NAVY} style={styles.emptyStateTitle}>
-                    Sélectionnez un chat
-                  </ThemedText>
-                  <ThemedText lightColor={MUTED_TEXT} darkColor={MUTED_TEXT} style={styles.emptyStateText}>
-                    Choisissez un chat existant ou créez-en un nouveau pour commencer.
-                  </ThemedText>
-                </View>
-              )}
-            </View>
-          </View>
+          <View style={styles.headerSpacer} />
         </View>
       </View>
-    </ScrollView>
+
+      <View style={[styles.page, isDesktop && styles.pageDesktop]}>
+        <View style={[styles.managerCard, { maxHeight: managerPanelMaxHeight }]}>
+          <ScrollView
+            style={styles.managerScroll}
+            contentContainerStyle={styles.managerScrollContent}
+            showsVerticalScrollIndicator={false}>
+            <View style={styles.managerSection}>
+            <ThemedText lightColor={BRAND_NAVY} darkColor={BRAND_NAVY} style={styles.sectionTitle}>
+              Nouveau chat
+            </ThemedText>
+            <View style={[styles.createRow, isCompact && styles.stackRow]}>
+              <TextInput
+                placeholder="Nom du chat"
+                placeholderTextColor="#8C99A7"
+                value={newChatTitle}
+                onChangeText={setNewChatTitle}
+                style={[styles.topInput, isCompact && styles.fullWidthInput]}
+              />
+              <Pressable
+                onPress={createChat}
+                style={({ pressed }) => [
+                  styles.createButton,
+                  isCompact && styles.fullWidthButton,
+                  pressed && styles.buttonPressed,
+                ]}>
+                <MaterialIcons color="#FFFFFF" name="add" size={18} />
+                <ThemedText lightColor="#FFFFFF" darkColor="#FFFFFF" style={styles.createButtonText}>
+                  Créer
+                </ThemedText>
+              </Pressable>
+            </View>
+            </View>
+
+            {isRenamingChat ? (
+              <View style={styles.managerSection}>
+              <ThemedText lightColor={BRAND_NAVY} darkColor={BRAND_NAVY} style={styles.sectionTitle}>
+                Renommer le chat
+              </ThemedText>
+              <View style={[styles.renameRow, isCompact && styles.stackRow]}>
+                <TextInput
+                  placeholder="Nouveau nom du chat"
+                  placeholderTextColor="#8C99A7"
+                  value={editedChatTitle}
+                  onChangeText={setEditedChatTitle}
+                  style={[styles.topInput, isCompact && styles.fullWidthInput]}
+                />
+                <View style={[styles.renameActions, isCompact && styles.fullWidthActions]}>
+                  <Pressable
+                    onPress={renameActiveChat}
+                    style={({ pressed }) => [
+                      styles.iconGhostButton,
+                      styles.iconGhostButtonFilled,
+                      isCompact && styles.flexButton,
+                      pressed && styles.buttonPressed,
+                    ]}>
+                    <MaterialIcons color="#FFFFFF" name="check" size={18} />
+                  </Pressable>
+                  <Pressable
+                    onPress={cancelRenamingChat}
+                    style={({ pressed }) => [
+                      styles.iconGhostButton,
+                      isCompact && styles.flexButton,
+                      pressed && styles.buttonPressed,
+                    ]}>
+                    <MaterialIcons color={BRAND_NAVY} name="close" size={18} />
+                  </Pressable>
+                </View>
+              </View>
+              </View>
+            ) : null}
+
+            <View style={styles.managerSection}>
+            <ThemedText lightColor={BRAND_NAVY} darkColor={BRAND_NAVY} style={styles.sectionTitle}>
+              Vos chats
+            </ThemedText>
+            {chats.length === 0 ? (
+              <View style={styles.emptyChip}>
+                <ThemedText lightColor={MUTED_TEXT} darkColor={MUTED_TEXT} style={styles.emptyChipText}>
+                  Aucun chat pour le moment
+                </ThemedText>
+              </View>
+            ) : (
+              <View style={styles.chipsWrap}>
+                {chats.map((chat) => {
+                  const selected = chat.id === activeChatId;
+
+                  return (
+                    <Pressable
+                      key={chat.id}
+                      onPress={() => setActiveChatId(chat.id)}
+                      style={[styles.chatChip, selected && styles.chatChipActive]}>
+                      <ThemedText
+                        numberOfLines={1}
+                        lightColor={selected ? '#FFFFFF' : BRAND_NAVY}
+                        darkColor={selected ? '#FFFFFF' : BRAND_NAVY}
+                        style={styles.chatChipText}>
+                        {chat.title}
+                      </ThemedText>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+            </View>
+
+            {activeChat && !isRenamingChat ? (
+              <View style={styles.managerSection}>
+              <ThemedText lightColor={BRAND_NAVY} darkColor={BRAND_NAVY} style={styles.sectionTitle}>
+                Gérer le chat
+              </ThemedText>
+              <View style={[styles.manageActions, isCompact && styles.stackRow]}>
+                <Pressable
+                  onPress={startRenamingChat}
+                  style={({ pressed }) => [
+                    styles.manageButton,
+                    isCompact && styles.fullWidthButton,
+                    pressed && styles.buttonPressed,
+                  ]}>
+                  <ThemedText lightColor={BRAND_NAVY} darkColor={BRAND_NAVY} style={styles.manageButtonText}>
+                    Renommer
+                  </ThemedText>
+                </Pressable>
+                <Pressable
+                  onPress={deleteActiveChat}
+                  style={({ pressed }) => [
+                    styles.manageButton,
+                    styles.manageButtonDanger,
+                    isCompact && styles.fullWidthButton,
+                    pressed && styles.buttonPressed,
+                  ]}>
+                  <ThemedText lightColor="#FFFFFF" darkColor="#FFFFFF" style={styles.manageButtonTextLight}>
+                    Supprimer
+                  </ThemedText>
+                </Pressable>
+              </View>
+              </View>
+            ) : null}
+
+            <View style={styles.feedbackRow}>
+              <View style={[styles.feedbackDot, isListening && styles.feedbackDotActive]} />
+              <ThemedText lightColor={MUTED_TEXT} darkColor={MUTED_TEXT} style={styles.feedbackText}>
+                {feedback}
+              </ThemedText>
+            </View>
+
+            {!isSpeechRecognitionAvailable ? (
+              <View style={styles.helpBox}>
+                <ThemedText lightColor={BRAND_NAVY} darkColor={BRAND_NAVY} style={styles.helpTitle}>
+                  Activer la voix
+                </ThemedText>
+                <ThemedText lightColor={MUTED_TEXT} darkColor={MUTED_TEXT} style={styles.helpText}>
+                  Ce module demande un development build natif.
+                </ThemedText>
+                <ThemedText lightColor={BRAND_TEAL} darkColor={BRAND_TEAL} style={styles.helpCommand}>
+                  npx expo run:ios
+                </ThemedText>
+                <ThemedText lightColor={BRAND_TEAL} darkColor={BRAND_TEAL} style={styles.helpCommand}>
+                  npx expo run:android
+                </ThemedText>
+              </View>
+            ) : null}
+          </ScrollView>
+        </View>
+
+        <View style={styles.conversationCard}>
+          <ScrollView
+            style={styles.messagesScroll}
+            contentContainerStyle={styles.messagesContent}
+            showsVerticalScrollIndicator={false}>
+            {!activeChat
+              ? renderEmptyBubble(
+                  'Aucun chat sélectionné.',
+                  'Créez un chat ou choisissez-en un pour commencer la conversation.'
+                )
+              : activeChat.messages.length === 0
+                ? renderEmptyBubble(
+                    'Bonjour,',
+                    'utilisez le micro ou écrivez un message pour démarrer cette conversation.'
+                  )
+                : activeChat.messages.map((item) => (
+                    <View key={item.id} style={styles.messageBlock}>
+                      <View style={styles.messageBubble}>
+                        <ThemedText lightColor="#111111" darkColor="#111111" style={styles.messageText}>
+                          {item.text}
+                        </ThemedText>
+                        <View style={styles.messageTail} />
+                      </View>
+                      <ThemedText lightColor="#8A8F97" darkColor="#8A8F97" style={styles.messageMeta}>
+                        {new Date(item.createdAt).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </ThemedText>
+                    </View>
+                  ))}
+          </ScrollView>
+        </View>
+
+        {transcript ? (
+          <View style={styles.transcriptBanner}>
+            <View style={styles.transcriptCopy}>
+              <ThemedText lightColor={BRAND_NAVY} darkColor={BRAND_NAVY} style={styles.transcriptTitle}>
+                Transcription vocale
+              </ThemedText>
+              <ThemedText lightColor="#304B64" darkColor="#304B64" style={styles.transcriptBody}>
+                {transcript}
+              </ThemedText>
+            </View>
+            <Pressable
+              onPress={() => addMessageToChat(transcript)}
+              disabled={!activeChat || !transcript.trim()}
+              style={({ pressed }) => [
+                styles.transcriptAction,
+                (!activeChat || !transcript.trim()) && styles.transcriptActionDisabled,
+                pressed && activeChat && transcript.trim() && styles.buttonPressed,
+              ]}>
+              <MaterialIcons color="#FFFFFF" name="south-east" size={18} />
+            </Pressable>
+          </View>
+        ) : null}
+
+        <View style={styles.composerBar}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={handleCameraPress}
+            style={({ pressed }) => [styles.cameraButton, pressed && styles.buttonPressed]}>
+            <MaterialIcons color="#FFFFFF" name="photo-camera" size={22} />
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            disabled={!isSpeechRecognitionAvailable}
+            onPress={handleMicroPress}
+            style={({ pressed }) => [
+              styles.micButton,
+              isListening && styles.micButtonActive,
+              !isSpeechRecognitionAvailable && styles.composerButtonDisabled,
+              pressed && isSpeechRecognitionAvailable && styles.buttonPressed,
+            ]}>
+            <MaterialIcons color="#FFFFFF" name={isListening ? 'stop' : 'mic'} size={22} />
+          </Pressable>
+
+          <TextInput
+            placeholder={activeChat ? 'Votre message ...' : 'Sélectionnez un chat ...'}
+            placeholderTextColor="#7F8894"
+            value={draftMessage}
+            onChangeText={setDraftMessage}
+            editable={!!activeChat}
+            returnKeyType="send"
+            onSubmitEditing={sendDraftMessage}
+            style={styles.composerInput}
+          />
+
+          <Pressable
+            accessibilityRole="button"
+            disabled={!activeChat || !draftMessage.trim()}
+            onPress={sendDraftMessage}
+            style={({ pressed }) => [
+              styles.sendButton,
+              (!activeChat || !draftMessage.trim()) && styles.sendButtonDisabled,
+              pressed && activeChat && draftMessage.trim() && styles.buttonPressed,
+            ]}>
+            <MaterialIcons
+              color={!activeChat || !draftMessage.trim() ? '#92A0AE' : BRAND_NAVY}
+              name="send"
+              size={21}
+            />
+          </Pressable>
+        </View>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -633,358 +701,404 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: 28,
-    paddingBottom: 40,
-    backgroundColor: '#FFFFFF',
-  },
-  page: {
-    width: '100%',
-    maxWidth: 1180,
-    alignSelf: 'center',
-    gap: 24,
-  },
   header: {
-    alignItems: 'flex-start',
-    gap: 10,
+    backgroundColor: BRAND_NAVY,
+    paddingTop: 24,
+    paddingBottom: 30,
+    paddingHorizontal: 18,
+    borderBottomLeftRadius: 34,
+    borderBottomRightRadius: 34,
   },
-  headerBadge: {
+  headerTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: 'rgba(2, 175, 168, 0.10)',
   },
-  headerBadgeText: {
-    fontSize: 12,
-    fontFamily: Fonts.bold,
-    letterSpacing: 0.6,
-  },
-  title: {
-    fontSize: 38,
-    lineHeight: 42,
-    fontFamily: Fonts.extraBold,
-  },
-  description: {
-    maxWidth: 720,
-    fontSize: 17,
-    lineHeight: 28,
-    fontFamily: Fonts.regular,
-  },
-  grid: {
-    gap: 20,
-  },
-  gridWide: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  sideColumn: {
-    flex: 0.95,
-    gap: 20,
-  },
-  mainColumn: {
-    flex: 1.15,
-    gap: 20,
-  },
-  card: {
-    borderRadius: 28,
-    padding: 20,
-    gap: 16,
-    backgroundColor: SURFACE_COLOR,
-    borderWidth: 1,
-    borderColor: BORDER_COLOR,
-  },
-  chatCard: {
-    minHeight: 440,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  headerIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
   },
-  cardTitle: {
-    fontSize: 22,
+  headerCopy: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
+  },
+  headerTitle: {
+    fontSize: 24,
     lineHeight: 28,
     fontFamily: Fonts.bold,
   },
-  sectionHint: {
+  headerSubtitle: {
     fontSize: 13,
     lineHeight: 18,
     fontFamily: Fonts.medium,
+    textAlign: 'center',
+  },
+  headerSpacer: {
+    width: 42,
+  },
+  page: {
+    flex: 1,
+    width: '100%',
+    alignSelf: 'center',
+    maxWidth: 760,
+    marginTop: -18,
+    paddingHorizontal: 14,
+    paddingBottom: 16,
+    gap: 12,
+  },
+  pageDesktop: {
+    paddingHorizontal: 20,
+  },
+  managerCard: {
+    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: BORDER_COLOR,
+    padding: 0,
+    overflow: 'hidden',
+    shadowColor: BRAND_NAVY,
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
+    elevation: 3,
+  },
+  managerScroll: {
+    flexGrow: 0,
+  },
+  managerScrollContent: {
+    padding: 18,
+    gap: 16,
+  },
+  managerSection: {
+    gap: 10,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontFamily: Fonts.bold,
   },
   createRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
   },
-  input: {
+  stackRow: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+  },
+  topInput: {
     flex: 1,
     minHeight: 52,
     borderRadius: 16,
+    backgroundColor: '#F7F9FC',
     borderWidth: 1,
     borderColor: BORDER_COLOR,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     color: BRAND_NAVY,
     fontFamily: Fonts.regular,
   },
-  smallActionButton: {
+  fullWidthInput: {
+    width: '100%',
+    flexBasis: 'auto',
+    flexGrow: 0,
+  },
+  createButton: {
     minHeight: 52,
     borderRadius: 16,
     backgroundColor: BRAND_TEAL,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  smallActionButtonText: {
-    fontSize: 14,
-    fontFamily: Fonts.bold,
-  },
-  chipsWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  chatChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: BORDER_COLOR,
-  },
-  chatChipActive: {
-    backgroundColor: BRAND_TEAL,
-    borderColor: BRAND_TEAL,
-  },
-  chatChipText: {
-    fontSize: 14,
-    fontFamily: Fonts.medium,
-  },
-  emptyBox: {
-    width: '100%',
-    borderRadius: 18,
-    padding: 16,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: BORDER_COLOR,
-  },
-  emptyText: {
-    fontSize: 15,
-    lineHeight: 24,
-    fontFamily: Fonts.regular,
-  },
-  statusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: 'rgba(11, 62, 107, 0.06)',
-  },
-  statusPillActive: {
-    backgroundColor: 'rgba(2, 175, 168, 0.12)',
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 999,
-    backgroundColor: BRAND_NAVY,
-  },
-  statusDotActive: {
-    backgroundColor: BRAND_TEAL,
-  },
-  statusText: {
-    fontSize: 13,
-    fontFamily: Fonts.bold,
-  },
-  actions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  button: {
-    flex: 1,
-    minHeight: 54,
-    borderRadius: 18,
     paddingHorizontal: 18,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
-  primaryButton: {
-    backgroundColor: BRAND_TEAL,
+  fullWidthButton: {
+    width: '100%',
   },
-  secondaryButton: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: BORDER_COLOR,
-  },
-  buttonTextLight: {
-    fontSize: 15,
-    fontFamily: Fonts.bold,
-  },
-  buttonTextDark: {
-    fontSize: 15,
-    fontFamily: Fonts.bold,
-  },
-  buttonDisabled: {
-    opacity: 0.45,
-  },
-  buttonPressed: {
-    opacity: 0.86,
-    transform: [{ scale: 0.99 }],
-  },
-  feedbackBox: {
-    borderRadius: 18,
-    padding: 14,
-    backgroundColor: 'rgba(11, 62, 107, 0.04)',
-  },
-  feedbackText: {
+  createButtonText: {
     fontSize: 14,
-    lineHeight: 22,
-    fontFamily: Fonts.medium,
-  },
-  transcriptCard: {
-    borderRadius: 22,
-    padding: 16,
-    gap: 8,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: BORDER_COLOR,
-  },
-  transcriptLabel: {
-    fontSize: 12,
-    fontFamily: Fonts.bold,
-    letterSpacing: 0.8,
-  },
-  transcriptText: {
-    fontSize: 15,
-    lineHeight: 25,
-    fontFamily: Fonts.regular,
-    minHeight: 48,
-  },
-  helpCard: {
-    borderRadius: 20,
-    padding: 16,
-    gap: 6,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: BORDER_COLOR,
-  },
-  helpTitle: {
-    fontSize: 16,
-    lineHeight: 22,
     fontFamily: Fonts.bold,
   },
-  helpText: {
-    fontSize: 14,
-    lineHeight: 22,
-    fontFamily: Fonts.regular,
-  },
-  helpCommand: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontFamily: Fonts.mono,
-  },
-  chatHeader: {
-    gap: 14,
-  },
-  chatHeaderCopy: {
-    gap: 4,
-  },
-  activeChatTitle: {
-    fontSize: 16,
-    lineHeight: 24,
-    fontFamily: Fonts.medium,
-  },
-  actionStack: {
+  renameRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
     gap: 10,
   },
-  ghostButton: {
-    minHeight: 42,
-    paddingHorizontal: 14,
-    borderRadius: 14,
+  renameActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  fullWidthActions: {
+    width: '100%',
+  },
+  iconGhostButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: BORDER_COLOR,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  ghostButtonFilled: {
+  flexButton: {
+    flex: 1,
+    width: 'auto',
+  },
+  iconGhostButtonFilled: {
     backgroundColor: BRAND_TEAL,
     borderColor: BRAND_TEAL,
   },
-  ghostButtonDanger: {
-    backgroundColor: DANGER_COLOR,
-    borderColor: DANGER_COLOR,
-  },
-  ghostButtonTextLight: {
-    fontSize: 14,
-    fontFamily: Fonts.bold,
-  },
-  ghostButtonTextDark: {
-    fontSize: 14,
-    fontFamily: Fonts.bold,
-  },
-  messagesBox: {
-    flex: 1,
-  },
-  messagesList: {
-    gap: 12,
-  },
-  messageBubble: {
-    alignSelf: 'flex-start',
-    maxWidth: '92%',
-    padding: 16,
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
+  emptyChip: {
+    borderRadius: 18,
+    backgroundColor: '#F7F9FC',
     borderWidth: 1,
-    borderColor: 'rgba(2, 175, 168, 0.18)',
+    borderColor: BORDER_COLOR,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
-  messageText: {
-    fontSize: 15,
-    lineHeight: 24,
-    fontFamily: Fonts.regular,
-  },
-  messageTime: {
-    marginTop: 8,
-    fontSize: 12,
-    lineHeight: 16,
+  emptyChipText: {
+    fontSize: 13,
     fontFamily: Fonts.medium,
   },
-  emptyStateLarge: {
+  chipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    width: '100%',
+  },
+  chatChip: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    backgroundColor: '#F7F9FC',
+    borderWidth: 1,
+    borderColor: BORDER_COLOR,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    maxWidth: '100%',
+    minWidth: 0,
+  },
+  chatChipActive: {
+    backgroundColor: BRAND_NAVY,
+    borderColor: BRAND_NAVY,
+  },
+  chatChipText: {
+    fontSize: 14,
+    fontFamily: Fonts.medium,
+  },
+  manageActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  manageButton: {
     flex: 1,
-    minHeight: 260,
-    borderRadius: 22,
-    backgroundColor: '#FFFFFF',
+    minHeight: 46,
+    borderRadius: 14,
+    backgroundColor: '#F7F9FC',
     borderWidth: 1,
     borderColor: BORDER_COLOR,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
+  },
+  manageButtonDanger: {
+    backgroundColor: DANGER_COLOR,
+    borderColor: DANGER_COLOR,
+  },
+  manageButtonText: {
+    fontSize: 14,
+    fontFamily: Fonts.bold,
+  },
+  manageButtonTextLight: {
+    fontSize: 14,
+    fontFamily: Fonts.bold,
+  },
+  feedbackRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  feedbackDot: {
+    width: 8,
+    height: 8,
+    marginTop: 6,
+    borderRadius: 999,
+    backgroundColor: BRAND_NAVY,
+  },
+  feedbackDotActive: {
+    backgroundColor: BRAND_TEAL,
+  },
+  feedbackText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 20,
+    fontFamily: Fonts.medium,
+  },
+  helpBox: {
+    borderRadius: 18,
+    backgroundColor: '#F7F9FC',
+    borderWidth: 1,
+    borderColor: BORDER_COLOR,
+    padding: 12,
+    gap: 4,
+  },
+  helpTitle: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontFamily: Fonts.bold,
+  },
+  helpText: {
+    fontSize: 13,
+    lineHeight: 20,
+    fontFamily: Fonts.regular,
+  },
+  helpCommand: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: Fonts.mono,
+  },
+  conversationCard: {
+    flex: 1,
+    minHeight: 0,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 2,
+  },
+  messagesScroll: {
+    flex: 1,
+  },
+  messagesContent: {
+    paddingTop: 8,
+    paddingBottom: 16,
+    gap: 22,
+  },
+  messageBlock: {
+    maxWidth: '92%',
+    alignSelf: 'flex-start',
     gap: 10,
   },
-  emptyStateTitle: {
-    fontSize: 20,
-    lineHeight: 26,
-    fontFamily: Fonts.bold,
-    textAlign: 'center',
+  messageBubble: {
+    position: 'relative',
+    backgroundColor: BUBBLE_BG,
+    borderRadius: 28,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
   },
-  emptyStateText: {
-    fontSize: 15,
-    lineHeight: 24,
+  messageTail: {
+    position: 'absolute',
+    right: 18,
+    bottom: -6,
+    width: 18,
+    height: 18,
+    backgroundColor: BUBBLE_BG,
+    transform: [{ rotate: '45deg' }],
+    borderBottomRightRadius: 6,
+  },
+  messageText: {
+    fontSize: 17,
+    lineHeight: 34,
     fontFamily: Fonts.regular,
-    textAlign: 'center',
-    maxWidth: 420,
+  },
+  messageMeta: {
+    marginLeft: 12,
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: Fonts.regular,
+  },
+  transcriptBanner: {
+    borderRadius: 22,
+    backgroundColor: '#F7F9FC',
+    borderWidth: 1,
+    borderColor: BORDER_COLOR,
+    padding: 12,
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+  },
+  transcriptCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  transcriptTitle: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: Fonts.bold,
+  },
+  transcriptBody: {
+    fontSize: 14,
+    lineHeight: 22,
+    fontFamily: Fonts.regular,
+  },
+  transcriptAction: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: BRAND_TEAL,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  transcriptActionDisabled: {
+    opacity: 0.45,
+  },
+  composerBar: {
+    minHeight: 66,
+    borderRadius: 28,
+    backgroundColor: COMPOSER_BG,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  cameraButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: BRAND_NAVY,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  micButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#61CACC',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  micButtonActive: {
+    backgroundColor: BRAND_TEAL,
+  },
+  composerButtonDisabled: {
+    opacity: 0.45,
+  },
+  composerInput: {
+    flex: 1,
+    minHeight: 48,
+    color: BRAND_NAVY,
+    fontSize: 16,
+    lineHeight: 22,
+    fontFamily: Fonts.regular,
+    paddingHorizontal: 6,
+  },
+  sendButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#D7DDE5',
+  },
+  sendButtonDisabled: {
+    opacity: 0.72,
+  },
+  buttonPressed: {
+    opacity: 0.86,
+    transform: [{ scale: 0.98 }],
   },
 });

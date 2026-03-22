@@ -1,0 +1,2 @@
+npx expo start --dev-client
+npx expo run:android 

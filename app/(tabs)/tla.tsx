@@ -1,8 +1,10 @@
+import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
-import { type ReactNode, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
+import { type ReactNode, useEffect, useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import ParallaxScrollView from '@/components/parallax-scroll-view';
+import { createPersistedChat } from '@/chat-store';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Fonts } from '@/constants/theme';
@@ -121,7 +123,7 @@ function SectionCard({
   children: ReactNode;
 }) {
   return (
-    <ThemedView lightColor="#FFFFFF" darkColor="#02afa8" style={styles.card}>
+    <ThemedView lightColor="#F8FCFD" darkColor="#F8FCFD" style={styles.card}>
       <ThemedText type="subtitle" style={styles.cardTitle}>
         {title}
       </ThemedText>
@@ -155,12 +157,15 @@ function JourneyTile({
 }
 
 export default function TlaScreen() {
+  const router = useRouter();
+  const isFocused = useIsFocused();
   const [painLevel, setPainLevel] = useState(0);
   const [painRuleWidth, setPainRuleWidth] = useState(0);
   const [isPainConfirmed, setIsPainConfirmed] = useState(false);
   const [selectedStepTwoOption, setSelectedStepTwoOption] = useState<string | null>(null);
   const [selectedStepThreeOption, setSelectedStepThreeOption] = useState<string | null>(null);
   const [selectedStepFourOption, setSelectedStepFourOption] = useState<string | null>(null);
+  const [isSubmittingSummary, setIsSubmittingSummary] = useState(false);
 
   const activePainGuide =
     PAIN_GUIDES.find((guide) => painLevel <= guide.maxValue) ?? PAIN_GUIDES[PAIN_GUIDES.length - 1];
@@ -206,15 +211,57 @@ export default function TlaScreen() {
     setSelectedStepFourOption(null);
   };
 
+  const resetJourney = () => {
+    setPainLevel(0);
+    setIsPainConfirmed(false);
+    setSelectedStepTwoOption(null);
+    setSelectedStepThreeOption(null);
+    setSelectedStepFourOption(null);
+    setIsSubmittingSummary(false);
+  };
+
+  useEffect(() => {
+    if (!isFocused) {
+      setPainLevel(0);
+      setIsPainConfirmed(false);
+      setSelectedStepTwoOption(null);
+      setSelectedStepThreeOption(null);
+      setSelectedStepFourOption(null);
+      setIsSubmittingSummary(false);
+    }
+  }, [isFocused]);
+
+  const handleCompleteJourney = async () => {
+    if (!selectedStepTwoLabel || !selectedStepThreeLabel || !selectedStepFourLabel) {
+      return;
+    }
+
+    const summary = [
+      'Résumé du parcours TLA',
+      `Douleur : ${painLevel}/10 (${activePainGuide.caption})`,
+      `Zone : ${selectedStepTwoLabel}`,
+      `Depuis : ${selectedStepThreeLabel}`,
+      `Symptômes : ${selectedStepFourLabel}`,
+    ].join('\n');
+
+    try {
+      setIsSubmittingSummary(true);
+      await createPersistedChat({
+        title: `Résumé TLA - ${selectedStepTwoLabel}`,
+        firstMessage: summary,
+      });
+      resetJourney();
+      router.push('/chats');
+    } catch {
+      Alert.alert('Erreur', 'Impossible de créer le chat de résumé pour le moment.');
+    } finally {
+      setIsSubmittingSummary(false);
+    }
+  };
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#830fa0', dark: '#02afa8' }} //
-      headerImage={
-        <ThemedView lightColor="#02afa8" darkColor="#0b3e6b" style={styles.headerBadge}>
-          <ThemedText style={styles.headerText}>TLA</ThemedText>
-        </ThemedView>
-      }>
-      <ThemedView lightColor="#FFFFFF" darkColor="#000000" style={styles.content}>
+    <ScrollView style={styles.screen} contentContainerStyle={styles.scrollContent}>
+      <ThemedView lightColor="#FFFFFF" darkColor="#FFFFFF" style={styles.content}>
         <ThemedText type="title" style={styles.title}>
           TLA
         </ThemedText>
@@ -351,49 +398,55 @@ export default function TlaScreen() {
         ) : null}
 
         {selectedStepFourOption ? (
-          <ThemedText style={styles.endText}>Fin du parcours</ThemedText>
+          <Pressable
+            accessibilityRole="button"
+            disabled={isSubmittingSummary}
+            onPress={() => void handleCompleteJourney()}
+            style={({ pressed }) => [
+              styles.endButton,
+              isSubmittingSummary && styles.endButtonDisabled,
+              pressed && !isSubmittingSummary && styles.confirmButtonPressed,
+            ]}>
+            <ThemedText style={styles.endText}>{isSubmittingSummary ? 'Création...' : 'Terminer'}</ThemedText>
+          </Pressable>
         ) : null}
       </ThemedView>
-    </ParallaxScrollView>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  headerBadge: {
-    width: 170,
-    height: 170,
-    borderRadius: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'absolute',
-    right: 24,
-    top: 40,
-    transform: [{ rotate: '-8deg' }],
+  screen: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
   },
-  headerText: {
-    fontSize: 38,
-    fontFamily: Fonts.extraBold,
-    letterSpacing: 2,
-    color: '#ffffff',
+  scrollContent: {
+    paddingVertical: 24,
   },
   content: {
+    backgroundColor: '#FFFFFF',
     gap: 18,
+    paddingHorizontal: 20,
+    paddingBottom: 32,
   },
   title: {
     textAlign: 'center',
     fontFamily: Fonts.extraBold,
+    color: '#0b3e6b',
   },
   description: {
     textAlign: 'center',
     opacity: 0.8,
     fontFamily: Fonts.bold,
-    color: '#FFFFFF',
+    color: '#0b3e6b',
   },
   card: {
     borderRadius: 24,
     padding: 20,
     gap: 14,
-    shadowColor: '#00ff04',
+    borderWidth: 1,
+    borderColor: 'rgba(11, 62, 107, 0.10)',
+    shadowColor: '#0b3e6b',
     shadowOpacity: 0.08,
     shadowRadius: 12,
     shadowOffset: {
@@ -405,13 +458,13 @@ const styles = StyleSheet.create({
   cardTitle: {
     textAlign: 'center',
     fontFamily: Fonts.bold,
-    color: '#FFFFFF',
+    color: '#0b3e6b',
   },
   cardDescription: {
     textAlign: 'center',
     opacity: 0.78,
     fontFamily: Fonts.bold,
-    color: '#FFFFFF',
+    color: '#44637d',
   },
   selectionText: {
     textAlign: 'center',
@@ -541,16 +594,23 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 90,
   },
-  endText: {
-    textAlign: 'center',
-    fontFamily: Fonts.bold,
-    color: '#FFFFFF',
+  endButton: {
     backgroundColor: '#0b3e6b',
     borderRadius: 18,
     paddingVertical: 14,
     paddingHorizontal: 20,
-    overflow: 'hidden',
     alignSelf: 'center',
+    minWidth: 160,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  endButtonDisabled: {
+    opacity: 0.6,
+  },
+  endText: {
+    textAlign: 'center',
+    fontFamily: Fonts.bold,
+    color: '#FFFFFF',
   },
   choiceSummaryText: {
     textAlign: 'center',
