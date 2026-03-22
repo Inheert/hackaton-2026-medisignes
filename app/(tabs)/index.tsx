@@ -147,7 +147,7 @@ export default function HomeScreen() {
           {feedback ? <ThemedText style={styles.feedbackText}>{feedback}</ThemedText> : null}
         </ThemedView>
 
-        <ThemedView lightColor="#F8FCFA" darkColor="#202622" style={styles.card}>
+        <ThemedView lightColor="#F8FCFA" darkColor="#02afa8" style={styles.card}>
           <ThemedText type="subtitle" style={styles.cardTitle}>
             Transcription
           </ThemedText>

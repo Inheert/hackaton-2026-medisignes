@@ -47,6 +47,18 @@ const PAIN_GUIDES: PainGuide[] = [
     maxValue: 10,
   },
 ];
+function getPainColor(id: 'low' | 'medium' | 'high'): string {
+  switch (id) {
+    case 'low':
+      return '#27740eb5'; // green
+    case 'medium':
+      return '#bebc27'; // yellow
+    case 'high':
+      return '#b70808'; // red
+    default:
+      return '#0b3e6b';
+  }
+}
 const STEP_TWO_OPTIONS: JourneyOption[] = [
   {
     id: 'tete',
@@ -196,13 +208,13 @@ export default function TlaScreen() {
 
   return (
     <ParallaxScrollView
-      headerBackgroundColor={{ light: '#830fa0', dark: '#df0f0f' }}
+      headerBackgroundColor={{ light: '#830fa0', dark: '#02afa8' }} //
       headerImage={
-        <ThemedView lightColor="#32d77f" darkColor="#213ac8" style={styles.headerBadge}>
+        <ThemedView lightColor="#02afa8" darkColor="#0b3e6b" style={styles.headerBadge}>
           <ThemedText style={styles.headerText}>TLA</ThemedText>
         </ThemedView>
       }>
-      <ThemedView style={styles.content}>
+      <ThemedView lightColor="#F8FCFA" darkColor="#000000" style={styles.content}>
         <ThemedText type="title" style={styles.title}>
           TLA
         </ThemedText>
@@ -213,7 +225,7 @@ export default function TlaScreen() {
         <SectionCard
           title="Etape 1"
           description="0 = aucune douleur, 10 = douleur maximale">
-          <ThemedText style={styles.selectionText}>
+          <ThemedText style={[styles.selectionText, { color: getPainColor(activePainGuide.id) }]}>
             {painLevel} / 10 · {activePainGuide.caption}
           </ThemedText>
 
@@ -255,7 +267,7 @@ export default function TlaScreen() {
                   style={[styles.painGuideCard, activePainGuide.id === guide.id && styles.painGuideCardActive]}>
                   <Image source={guide.source} contentFit="contain" style={styles.painGuideImage} />
                   <ThemedText style={styles.painGuideLabel}>{guide.label}</ThemedText>
-                  <ThemedText style={styles.painGuideCaption}>{guide.caption}</ThemedText>
+                  <ThemedText style={[styles.painGuideCaption, { color: getPainColor(guide.id) }]}>{guide.caption}</ThemedText>
                 </View>
               ))}
             </View>
@@ -319,7 +331,7 @@ export default function TlaScreen() {
         {selectedStepThreeOption ? (
           <SectionCard
             title="Etape 4"
-            description="Quels symptomes?">
+            description="Quels symptômes?">
             <View style={styles.optionRow}>
               {STEP_FOUR_OPTIONS.map((option) => (
                 <JourneyTile
@@ -362,7 +374,7 @@ const styles = StyleSheet.create({
     fontSize: 38,
     fontFamily: Fonts.extraBold,
     letterSpacing: 2,
-    color: '#e3e013',
+    color: '#ffffff',
   },
   content: {
     gap: 18,
@@ -379,7 +391,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 20,
     gap: 14,
-    shadowColor: '#000000',
+    shadowColor: '#00ff04',
     shadowOpacity: 0.08,
     shadowRadius: 12,
     shadowOffset: {
@@ -399,7 +411,6 @@ const styles = StyleSheet.create({
   selectionText: {
     textAlign: 'center',
     fontFamily: Fonts.bold,
-    color: '#236B56',
   },
   painScale: {
     gap: 14,
@@ -473,7 +484,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     opacity: 0.72,
     fontFamily: Fonts.regular,
-    color: '#0b3e6b',
   },
   confirmButton: {
     marginTop: 2,
@@ -481,7 +491,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#236B56',
+    backgroundColor: '#0b3e6b',
   },
   confirmButtonPressed: {
     opacity: 0.9,
@@ -540,6 +550,6 @@ const styles = StyleSheet.create({
   choiceSummaryText: {
     textAlign: 'center',
     fontFamily: Fonts.semiBold,
-    color: '#174B3B',
+    color: '#0b3e6b',
   },
 });
